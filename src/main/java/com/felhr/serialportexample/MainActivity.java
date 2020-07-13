@@ -159,6 +159,7 @@ public class MainActivity extends AppCompatActivity implements PictureCapturingL
     MediaPlayer sound4;
     MediaPlayer soundCoba;
     MediaPlayer soundGagal;
+    //aaaa
 
     TextView namabarang;
     TextView golongan;
