@@ -16,6 +16,7 @@ import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.hardware.Camera;
 import android.media.MediaPlayer;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -26,6 +27,7 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Base64;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -47,13 +49,17 @@ import com.felhr.serialportexample.entity.Classifier;
 import com.felhr.serialportexample.entity.Recognition;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.lang.ref.WeakReference;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -179,6 +185,8 @@ public class MainActivity extends AppCompatActivity implements PictureCapturingL
         sv = (SurfaceView) findViewById(R.id.surfaceView);
         cancel =(Button) findViewById(R.id.cancel);
         oke =(Button) findViewById(R.id.oke);
+        oke.setVisibility(View.GONE);
+        cancel.setVisibility(View.GONE);
         sound1 = MediaPlayer.create(this, R.raw.sound1);
         sound2 = MediaPlayer.create(this, R.raw.sound3);
         sound3 = MediaPlayer.create(this, R.raw.sound2);
@@ -258,7 +266,9 @@ public class MainActivity extends AppCompatActivity implements PictureCapturingL
         status =(TextView) findViewById(R.id.status);
         editText = (EditText) findViewById(R.id.editText1);
         namabarang = (TextView) findViewById(R.id.namabarang);
+        namabarang.setText("Nama : ");
         golongan = (TextView) findViewById(R.id.golongan);
+        golongan.setVisibility(View.GONE);
         Button sendButton = (Button) findViewById(R.id.buttonSend);
         Button setting= (Button) findViewById(R.id.sett);
         Button kalibrasi = (Button) findViewById(R.id.kalibrasi);
@@ -380,13 +390,84 @@ public class MainActivity extends AppCompatActivity implements PictureCapturingL
     }
     ///////////////////////////////////////////////////////////////////////funtion
 
+
+    public void upload(String Url, String method, String imageString) {
+        new AsyncTask<String, String, String>() {
+            String method, imageString;
+            int tmp;
+            String data="";
+
+            protected void onPreExecute() {
+            }
+            @Override
+            protected String doInBackground(String... params) {
+                try {
+                    URL url = new URL(params[0]);
+                    method = params[1];
+                    String urlParams = params[2];
+
+                    HttpURLConnection httpURLConnection = (HttpURLConnection) url.openConnection();
+
+                    httpURLConnection.setDoOutput(true);
+                    httpURLConnection.setRequestMethod(method);
+
+                    httpURLConnection.setUseCaches(false);
+                    httpURLConnection.setAllowUserInteraction(false);
+
+                    OutputStream os = httpURLConnection.getOutputStream();
+                    os.write(urlParams.getBytes());
+                    os.flush();
+                    os.close();
+
+                    InputStream is = httpURLConnection.getInputStream();
+                    while((tmp=is.read())!=-1){
+                        data+= (char)tmp;
+                    }
+
+//                    namabarang.setText("Nama : "+ data);
+
+                    is.close();
+                    httpURLConnection.disconnect();
+
+                    return data;
+                } catch (MalformedURLException e) {
+                    e.printStackTrace();
+                    return "Exception: "+e.getMessage();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return "Exception: "+e.getMessage();
+                }
+            }
+
+            @Override
+            protected void onPostExecute(String msg) {
+//                Toast.makeText(MainActivity.this.getApplicationContext(),msg,Toast.LENGTH_LONG).show();
+                namabarang.setText(data);
+                if(data.length()>6 && data.indexOf("t")>0 && data.indexOf("h")>0 && data.indexOf("a")>0) {
+                    webView.loadUrl("http://192.168.43.216/absen/upload/rfid.php?rfid=12358595&time="+data);
+                }
+            }
+        }.execute(Url, method, imageString);
+    }
+
+    public String getEncoded64ImageStringFromBitmap(Bitmap bitmap) {
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.PNG, 50, stream);
+        byte[] byteFormat = stream.toByteArray();
+        String imgString = Base64.encodeToString(byteFormat, Base64.NO_WRAP);
+        return imgString;
+    }
+
+
+
+
     private void CapturePhoto() {
 
 
         // Toast.makeText(getApplicationContext(), "Image snapshot   Started",Toast.LENGTH_SHORT).show();
         // here below "this" is activity context.
         //SurfaceView surface = new SurfaceView(this);
-        Camera camera = Camera.open();
+        Camera camera = Camera.open(1);
         // Toast.makeText(MainActivity.this, "ceki", Toast.LENGTH_SHORT).show();
         try {
             camera.setPreviewDisplay(sv.getHolder());
@@ -396,10 +477,10 @@ public class MainActivity extends AppCompatActivity implements PictureCapturingL
         }
         // camera.autoFocus();
         Camera.Parameters params = camera.getParameters();
-        params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
-        params.setZoom(1);
-        params.setFlashMode(Camera.Parameters.FLASH_MODE_ON);
-        params.setRotation(90);
+//        params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+////        params.setZoom(1);
+////        params.setFlashMode(Camera.Parameters.FLASH_MODE_ON);
+        params.setRotation(270);
         camera.setParameters(params);
         camera.startPreview();
 
@@ -441,18 +522,26 @@ public class MainActivity extends AppCompatActivity implements PictureCapturingL
 
                     Bitmap bitmap = Bitmap.createScaledBitmap(
                             myBitmap,
-                            IMG_SIZE,
-                            IMG_SIZE,
+                            144,
+                            240,
                             true
                     );
                     imgObject.setImageBitmap(bitmap);
+                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream);
 
-                    Bitmap bitmap1 = ((BitmapDrawable)imgObject.getDrawable()).getBitmap();
-                    String label = "";
-                    List<Classifier> resultPredict = recognition.recognize(bitmap1);
-                    for (Classifier result: resultPredict) {
-                        label+= result.getTitle() + " ";
-                    }
+                    byte[] byte_arr = stream.toByteArray();
+                    String encodedString = Base64.encodeToString(byte_arr, 0);
+
+                    upload("http://192.168.43.216/absen/upload/ImageUpload.php","POST",getEncoded64ImageStringFromBitmap(bitmap));
+
+
+//                    Bitmap bitmap1 = ((BitmapDrawable)imgObject.getDrawable()).getBitmap();
+//                    String label = "";
+//                    List<Classifier> resultPredict = recognition.recognize(bitmap1);
+//                    for (Classifier result: resultPredict) {
+//                        label+= result.getTitle() + " ";
+//                    }
 
                     //Toast.makeText(MainActivity.this, label, Toast.LENGTH_SHORT).show();
 
@@ -473,71 +562,77 @@ public class MainActivity extends AppCompatActivity implements PictureCapturingL
 
 
 
-                    String lab ="";
-                    if( label.contains("jug")){a1=a1+1;}if( label.contains("tup")){a1=a1+1;}if (label.contains("tray")){a1=a1+1;}
-                    if (label.contains("towel")){a1=a1+1;}if (label.contains("loaf")){a1=a1+1;}if (label.contains("spatula")){a1=a1+1;}
-                    if (label.contains("rubber")){a1=a1+1;}if (label.contains("eraser")){a1=a1+1;}if (label.contains("bathtup")){a1=a1+1;}
-                    if (label.contains("dough")){a1=a1+1;}if (label.contains("band aid")){a1=a1+1;}if (label.contains("tub")){a1=a1+1;}
-                    if (label.contains("towel")){a1=a1+1;}
-//                    if( label.contains("jug")){a1=a1+1;}
+//                    String lab ="";
+//                    if( label.contains("jug")){a1=a1+1;}if( label.contains("tup")){a1=a1+1;}if (label.contains("tray")){a1=a1+1;}
+//                    if (label.contains("towel")){a1=a1+1;}if (label.contains("loaf")){a1=a1+1;}if (label.contains("spatula")){a1=a1+1;}
+//                    if (label.contains("rubber")){a1=a1+1;}if (label.contains("eraser")){a1=a1+1;}if (label.contains("bathtup")){a1=a1+1;}
+//                    if (label.contains("dough")){a1=a1+1;}if (label.contains("band aid")){a1=a1+1;}if (label.contains("tub")){a1=a1+1;}
+//                    if (label.contains("towel")){a1=a1+1;}
+////                    if( label.contains("jug")){a1=a1+1;}
+//
+//                    if( label.contains("jug")){a2=a2+1;}if( label.contains("lotion")){a2=a2+1;}if( label.contains("spray")){a2=a2+1;}
+//                    if( label.contains("bottle")){a2=a2+1;}if( label.contains("cup")){a2=a2+1;}if( label.contains("bubble")){a2=a2+1;}
+//                    if( label.contains("water")){a2=a2+1;}if( label.contains("paint")){a2=a2+1;}
+//
+//                    if( label.contains("plastic")){a3=a3+1;}if( label.contains("bag")){a3=a3+1;}
+//
+//                    if( label.contains("tissue")){a4=a4+1;}if( label.contains("towel")){a4=a4+1;} if( label.contains("quilt")){a4=a4+1;}
+//                    if( label.contains("paper")){a4=a4+1;}
+//                    if( label.contains("menu")){a4=a4+1;}if( label.contains("pack")){a4=a4+1;}if( label.contains("book")){a4=a4+1;}
+//                    if( label.contains("diaper")){a4=a4+1;}if( label.contains("hand")){a4=a4+1;}if( label.contains("envelope")){a4=a4+1;}
+//                    if( label.contains("carton")){a4=a4+1;}if( label.contains("puzzle")){a4=a4+1;}if( label.contains("spatula")){a4=a4+1;}
+//                    if( label.contains("rule")){a4=a4+1;}
+//                    if( label.contains("hoopskirt")){a4=a4+1;}
+//
+//                    label = label + "" + a1 + "" + a2 + "" + a3 + "" + a4;
+//
+////                    if(a1==a2 || a1==a3 || a1==a4 || a2==a3 || a2==a4 || a3==a4) {
+////                        CapturePhoto();
+////                    }Toast.makeText(MainActivity.this, lab, Toast.LENGTH_SHORT).show();
+////                    }
+////                    else{
+//
+//                        if (a1 > a2 && a1 > a3 && a1 > a4) {
+//                            selections = "an";
+//                            lab = "Golongan : 1 (Gabus)";
+//                            a1=0;a2=0;a3=0;a4=0;
+//                        } else if (a2 > a1 && a2 > a3 && a2 > a4) {
+//                            selections = "bn";
+//                            lab = "Golongan : 2 (Botol)";
+//                            a1=0;a2=0;a3=0;a4=0;
+//                        } else if (a3 > a1 && a3 > a2 && a3 > a4) {
+//                            selections = "cn";
+//                            lab = "Golongan : 3 (Plastik)";
+//                            a1=0;a2=0;a3=0;a4=0;
+//                        } else if (a4 > a1 && a4 > a2 && a4 > a3) {
+//                            selections = "dn";
+//                            lab = "Golongan : 4 (Kertas/tisue)";
+//
+//                            a1=0;a2=0;a3=0;a4=0;
+//                        } else {
+//                            if (a1>0 || a2>0 || a3>0 || a4>0 ){
+//                                selections = "kn";
+//                                lab = "Foto Lagi";
+//                                //oke.setText("foto lagi");
+////                                foto();
+//                                CapturePhoto();
+//                            }else{
+//
+//                                selections = "en";
+//                                lab = "Golongan : 5 (Lain - Lain)";
+//                                a1=0;a2=0;a3=0;a4=0;
+//                            }
+//
+//
+//                        }
+//                        namabarang.setText("Nama Barang : " + label);
+//                        golongan.setText(lab);
 
-                    if( label.contains("jug")){a2=a2+1;}if( label.contains("lotion")){a2=a2+1;}if( label.contains("spray")){a2=a2+1;}
-                    if( label.contains("bottle")){a2=a2+1;}if( label.contains("cup")){a2=a2+1;}if( label.contains("bubble")){a2=a2+1;}
-                    if( label.contains("water")){a2=a2+1;}if( label.contains("paint")){a2=a2+1;}
-
-                    if( label.contains("plastic")){a3=a3+1;}if( label.contains("bag")){a3=a3+1;}
-
-                    if( label.contains("tissue")){a4=a4+1;}if( label.contains("towel")){a4=a4+1;} if( label.contains("quilt")){a4=a4+1;}
-                    if( label.contains("paper")){a4=a4+1;}
-                    if( label.contains("menu")){a4=a4+1;}if( label.contains("pack")){a4=a4+1;}if( label.contains("book")){a4=a4+1;}
-                    if( label.contains("diaper")){a4=a4+1;}if( label.contains("hand")){a4=a4+1;}if( label.contains("envelope")){a4=a4+1;}
-                    if( label.contains("carton")){a4=a4+1;}if( label.contains("puzzle")){a4=a4+1;}if( label.contains("spatula")){a4=a4+1;}
-                    if( label.contains("rule")){a4=a4+1;}
-                    if( label.contains("hoopskirt")){a4=a4+1;}
-
-                    label = label + "" + a1 + "" + a2 + "" + a3 + "" + a4;
-
-//                    if(a1==a2 || a1==a3 || a1==a4 || a2==a3 || a2==a4 || a3==a4) {
-//                        CapturePhoto();
-//                    }Toast.makeText(MainActivity.this, lab, Toast.LENGTH_SHORT).show();
-//                    }
-//                    else{
-
-                        if (a1 > a2 && a1 > a3 && a1 > a4) {
-                            selections = "an";
-                            lab = "Golongan : 1 (Gabus)";
-                            a1=0;a2=0;a3=0;a4=0;
-                        } else if (a2 > a1 && a2 > a3 && a2 > a4) {
-                            selections = "bn";
-                            lab = "Golongan : 2 (Botol)";
-                            a1=0;a2=0;a3=0;a4=0;
-                        } else if (a3 > a1 && a3 > a2 && a3 > a4) {
-                            selections = "cn";
-                            lab = "Golongan : 3 (Plastik)";
-                            a1=0;a2=0;a3=0;a4=0;
-                        } else if (a4 > a1 && a4 > a2 && a4 > a3) {
-                            selections = "dn";
-                            lab = "Golongan : 4 (Kertas/tisue)";
-
-                            a1=0;a2=0;a3=0;a4=0;
-                        } else {
-                            if (a1>0 || a2>0 || a3>0 || a4>0 ){
-                                selections = "kn";
-                                lab = "Foto Lagi";
-                                //oke.setText("foto lagi");
-//                                foto();
-                                CapturePhoto();
-                            }else{
-
-                                selections = "en";
-                                lab = "Golongan : 5 (Lain - Lain)";
-                                a1=0;a2=0;a3=0;a4=0;
-                            }
 
 
-                        }
-                        namabarang.setText("Nama Barang : " + label);
-                        golongan.setText(lab);
+
+
+                    //////////////////////
                        // Toast.makeText(MainActivity.this, lab, Toast.LENGTH_SHORT).show();
 
 //                    }
